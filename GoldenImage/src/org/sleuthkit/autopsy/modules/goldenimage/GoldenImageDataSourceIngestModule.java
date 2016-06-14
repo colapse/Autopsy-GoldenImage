@@ -59,7 +59,7 @@ class GoldenImageDataSourceIngestModule implements DataSourceIngestModule {
 	private final AtomicInteger activeThreadsCount = new AtomicInteger();
 	
 	//private int giFileCount = 0;
-	private final AtomicInteger giFileCount = new AtomicInteger();;
+	private final AtomicInteger giFileCount = new AtomicInteger();
 
 	GoldenImageDataSourceIngestModule(GoldenImageModuleIngestJobSettings pSettings) {
 		settings = pSettings;
@@ -106,12 +106,13 @@ class GoldenImageDataSourceIngestModule implements DataSourceIngestModule {
 		try {
 			fileManager = Case.getCurrentCase().getServices().getFileManager();
 			List<AbstractFile> allFiles = fileManager.findFiles(goldenImageDS, "%");
-			System.out.println("ALL FILES: "+allFiles.size());
 			if (!allFiles.isEmpty()) {
+				ArrayList<FileWorkerThread> taskList = new ArrayList<>();
 				progressBar.switchToDeterminate(allFiles.size());
 				for (AbstractFile aFile : allFiles) {
 					//Stop processing if requested
 					if (context.dataSourceIngestIsCancelled()) {
+						executor.shutdownNow();
 						return IngestModule.ProcessResult.OK;
 					}
 
@@ -123,10 +124,16 @@ class GoldenImageDataSourceIngestModule implements DataSourceIngestModule {
 						progressBar.progress("Jumping over Non-File.", giFileCount.get());
 						continue;
 					}
-
+					
 					FileWorkerThread fileWorkerThread = new FileWorkerThread(aFile);
-					executor.submit(fileWorkerThread);
+					taskList.add(fileWorkerThread);
 
+				}
+				
+				if(!taskList.isEmpty()){
+					taskList.stream().forEach((task) -> {
+						executor.submit(task);
+					});
 				}
 			}
 
@@ -138,9 +145,12 @@ class GoldenImageDataSourceIngestModule implements DataSourceIngestModule {
 			
 			executor.shutdown();
 			
-			while(activeThreadsCount.get() > 0){
+			while(!executor.isTerminated()){
 				try {
-					System.out.println("SLEEPING 3 seconds; "+giFileCount+"/"+allFiles.size()+" (Threads: "+activeThreadsCount+")");
+					if (context.dataSourceIngestIsCancelled()) {
+						executor.shutdownNow();
+						return IngestModule.ProcessResult.OK;
+					}
 					Thread.sleep(3000);
 				} catch (InterruptedException ex) {
 					Exceptions.printStackTrace(ex);
@@ -148,16 +158,15 @@ class GoldenImageDataSourceIngestModule implements DataSourceIngestModule {
 			}
 
 			try {
-				System.out.println("attempt to shutdown executor");
 				executor.awaitTermination(5, TimeUnit.SECONDS);
 				if (!executor.isTerminated()) {
-					System.err.println("cancel non-finished tasks");
+					//System.err.println("cancel non-finished tasks");
 				}
 			} catch (InterruptedException ex) {
 				Exceptions.printStackTrace(ex);
 			} finally {
 				executor.shutdownNow();
-				System.out.println("shutdown finished");
+				//System.out.println("shutdown finished");
 			}
 
 			/**
@@ -321,9 +330,10 @@ class GoldenImageDataSourceIngestModule implements DataSourceIngestModule {
 					comparisonFailFiles.add(goldenImageFile);
 				} else if (dirtyImageFile.getMd5Hash().equals(goldenImageFile.getMd5Hash())) {
 					try {
-						tagsManager.addContentTag(dirtyImageFile, GoldenImageIngestModuleFactory.giTagSafe, "");
+						tagsManager.addContentTag(dirtyImageFile, GoldenImageIngestModuleFactory.giTagGood, "");
 					} catch (TskCoreException ex) {
 						//Exceptions.printStackTrace(ex);
+						activeThreadsCount.decrementAndGet();
 						return;
 					}
 
@@ -332,6 +342,7 @@ class GoldenImageDataSourceIngestModule implements DataSourceIngestModule {
 						tagsManager.addContentTag(dirtyImageFile, GoldenImageIngestModuleFactory.giTagChanged, "The Content of this file is different from it's equivalent on the golden image.");
 					} catch (TskCoreException ex) {
 						//Exceptions.printStackTrace(ex);
+						activeThreadsCount.decrementAndGet();
 						return;
 					}
 
@@ -345,6 +356,7 @@ class GoldenImageDataSourceIngestModule implements DataSourceIngestModule {
 					tagsManager.addContentTag(goldenImageFile, getCustomDeletedTag(dirtyImageDS.getName()), "The file exists on the Golden Image, but not on the Dirty Image.");
 				} catch (TskCoreException ex) {
 					//Exceptions.printStackTrace(ex);
+					activeThreadsCount.decrementAndGet();
 					return;
 				}
 			}

@@ -1,44 +1,10 @@
 /*
- * Sample ingest module factory in the public domain.  
- * Feel free to use this as a template for your inget module factories.
- * 
- *  Contact: Brian Carrier [carrier <at> sleuthkit [dot] org]
- *
- *  This is free and unencumbered software released into the public domain.
- *  
- *  Anyone is free to copy, modify, publish, use, compile, sell, or
- *  distribute this software, either in source code form or as a compiled
- *  binary, for any purpose, commercial or non-commercial, and by any
- *  means.
- *  
- *  In jurisdictions that recognize copyright laws, the author or authors
- *  of this software dedicate any and all copyright interest in the
- *  software to the public domain. We make this dedication for the benefit
- *  of the public at large and to the detriment of our heirs and
- *  successors. We intend this dedication to be an overt act of
- *  relinquishment in perpetuity of all present and future rights to this
- *  software under copyright law.
- *  
- *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- *  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- *  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
- *  IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
- *  OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- *  ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- *  OTHER DEALINGS IN THE SOFTWARE. 
+ * Factory for the Golden Image module.
  */
 package org.sleuthkit.autopsy.modules.goldenimage;
 
-// The following import is required for the ServiceProvider annotation (see 
-// below) used by the Autopsy ingest framework to locate ingest module 
-// factories. You will need to add a dependency on the Lookup API NetBeans 
-// module to your NetBeans module to use this import.
 import org.openide.util.Exceptions;
 import org.openide.util.lookup.ServiceProvider;
-
-// The following import is required to participate in Autopsy 
-// internationalization and localization. Autopsy core is currently localized 
-// for Japan. Please consult the NetBeans documentation for details.
 import org.openide.util.NbBundle;
 import org.sleuthkit.autopsy.casemodule.Case;
 import org.sleuthkit.autopsy.casemodule.services.TagsManager;
@@ -53,54 +19,15 @@ import org.sleuthkit.autopsy.ingest.IngestModuleIngestJobSettingsPanel;
 import org.sleuthkit.datamodel.TagName;
 import org.sleuthkit.datamodel.TskCoreException;
 
-/**
- * A factory that creates sample data source and file ingest modules.
- * <p>
- * This factory implements an interface that must be implemented by all
- * providers of Autopsy ingest modules. An ingest module factory is used to
- * create instances of a type of data source ingest module, a type of file
- * ingest module, or both.
- * <p>
- * Autopsy will generally use the factory to create several instances of each
- * type of module for each ingest job it performs. Completing an ingest job
- * entails processing a single data source (e.g., a disk image) and all of the
- * files from the data source, including files extracted from archives and any
- * unallocated space (made to look like a series of files). The data source is
- * passed through one or more pipelines of data source ingest modules. The files
- * are passed through one or more pipelines of file ingest modules.
- * <p>
- * Autopsy may use multiple threads to complete an ingest job, but it is
- * guaranteed that there will be no more than one module instance per thread.
- * However, if the module instances must share resources, the modules are
- * responsible for synchronizing access to the shared resources and doing
- * reference counting as required to release those resources correctly. Also,
- * more than one ingest job may be in progress at any given time. This must also
- * be taken into consideration when sharing resources between module instances.
- * <p>
- * An ingest module factory may provide global and per ingest job settings user
- * interface panels. The global settings should apply to all module instances.
- * The per ingest job settings should apply to all module instances working on a
- * particular ingest job. Autopsy supports context-sensitive and persistent per
- * ingest job settings, so per ingest job settings must be serializable.
- * <p>
- * To be discovered at runtime by the ingest framework, IngestModuleFactory
- * implementations must be marked with the following NetBeans Service provider
- * annotation (see below).
- * <p>
- * IMPORTANT TIP: This sample ingest module factory directly implements
- * IngestModuleFactory. A practical alternative, recommended if you do not need
- * to provide implementations of all of the IngestModuleFactory methods, is to
- * extend the abstract class IngestModuleFactoryAdapter to get default
- * implementations of most of the IngestModuleFactory methods.
- */
+
 @ServiceProvider(service = IngestModuleFactory.class) // Sample is discarded at runtime 
 public class GoldenImageIngestModuleFactory  extends IngestModuleFactoryAdapter{
 
     private static final String VERSION_NUMBER = "1.0.0";
     public static String giTagChangedName = "DI_Changed";
-    public static String giTagSafeName = "DI_Safe";
+    public static String giTagGoodName = "DI_Good";
     public static TagName giTagChanged;
-    public static TagName giTagSafe;
+    public static TagName giTagGood;
     
     public GoldenImageIngestModuleFactory(){
 	   super();
@@ -109,19 +36,19 @@ public class GoldenImageIngestModuleFactory  extends IngestModuleFactoryAdapter{
 	    TagsManager tagsManager = Case.getCurrentCase().getServices().getTagsManager();
 	    try {
 		    giTagChanged = tagsManager.addTagName(giTagChangedName, "The file exists on the golden image, but the content was changed.", TagName.HTML_COLOR.LIME);
-		    giTagSafe = tagsManager.addTagName(giTagSafeName, "The file exists on the golden image and wasn't changed.", TagName.HTML_COLOR.LIME);
+		    giTagGood = tagsManager.addTagName(giTagGoodName, "The file exists on the golden image and wasn't changed.", TagName.HTML_COLOR.LIME);
 	    } catch (TagsManager.TagNameAlreadyExistsException ex) {
 		    try {
 			for (TagName tagName : tagsManager.getAllTagNames()) {
-				if(giTagChanged != null && giTagSafe != null)
+				if(giTagChanged != null && giTagGood != null)
 					break;
 				
 				if (tagName.getDisplayName().equals(giTagChangedName)) {
 				    giTagChanged = tagName;
 				}
 				
-				if (tagName.getDisplayName().equals(giTagSafeName)) {
-				    giTagSafe = tagName;
+				if (tagName.getDisplayName().equals(giTagGoodName)) {
+				    giTagGood = tagName;
 				}
 			}
 		    } catch (TskCoreException ex1) {
